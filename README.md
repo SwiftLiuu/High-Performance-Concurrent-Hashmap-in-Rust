@@ -100,7 +100,6 @@ Implement a concurrent hash table in Rust that achieves **high throughput and st
   In *Proceedings of the Linux Symposium / USENIX OLS (ATC 2011)*, July 2010, Ottawa, Canada, pp. 71–80.  
   [PDF Link](https://www.usenix.org/legacy/event/atc11/tech/final_files/Triplett.pdf)
 
-
 - Tobias Maier, Peter Sanders, and Roman Dementiev.  
   *Concurrent Hash Tables: Fast and General(?)!*  
   *ACM Transactions on Parallel Computing*, Vol. 5, No. 4, Article 16, February 2019, pp. 1–32.  
@@ -109,17 +108,18 @@ Implement a concurrent hash table in Rust that achieves **high throughput and st
 - Zhiwen Chen, Xin He, Jianhua Sun, Hao Chen, Ligang He.  
   *Concurrent Hash Tables on Multicore Machines: Comparison, Evaluation and Implications*.  
   *Future Generation Computer Systems*, Vol. 82, 2018, pp. 127–141. Elsevier.  
-  DOI: [10.1016/j.future.2017.12.054](https://doi.org/10.1016/j.future.2017.12.054) :contentReference[oaicite:0]{index=0}
+  DOI: [10.1016/j.future.2017.12.054](https://doi.org/10.1016/j.future.2017.12.054)
 
 - Alexey A. Paznikov, Vadim A. Smirnov, Artur R. Omelnichenko.  
   *Towards Efficient Implementation of Concurrent Hash Tables and Search Trees Based on Software Transactional Memory*.  
   In *Proceedings of FarEastCon 2019*, IEEE, pp. 1–6.  
-  DOI: [10.1109/FarEastCon.2019.8934131](https://doi.org/10.1109/FarEastCon.2019.8934131) :contentReference[oaicite:1]{index=1}
+  DOI: [10.1109/FarEastCon.2019.8934131](https://doi.org/10.1109/FarEastCon.2019.8934131)
 
 - Julian Shun, Guy E. Blelloch.  
   *Phase-Concurrent Hash Tables for Determinism*.  
   In *Proceedings of the 26th ACM Symposium on Parallelism in Algorithms and Architectures (SPAA ’14)*, Prague, Czech Republic, June 2014, pp. 96–105. ACM.  
-  DOI: [10.1145/2612669.2612687](https://doi.org/10.1145/2612669.2612687) :contentReference[oaicite:2]{index=2}
+  DOI: [10.1145/2612669.2612687](https://doi.org/10.1145/2612669.2612687)
+
  
 
 ---
