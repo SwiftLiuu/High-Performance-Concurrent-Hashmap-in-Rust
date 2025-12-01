@@ -1,0 +1,11 @@
+[package]
+name = "cuckoo-hashmap"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A concurrent hash map using cuckoo hashing"
+
+[dependencies]
+
+[dev-dependencies]
+rand = "0.8"
