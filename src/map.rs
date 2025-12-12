@@ -807,3 +807,406 @@ where
 
         None
     }
+
+    /// Build cuckoo path records from BFS result
+    fn cuckoopath_search(
+        &self,
+        hp: usize,
+        resize_counter: usize,
+        path: &mut [CuckooRecord; MAX_BFS_PATH_LEN],
+        bslot: BSlot,
+        i1: usize,
+        i2: usize,
+    ) -> Option<usize> {
+        let depth = bslot.depth as usize;
+
+        let mut pathcode = bslot.pathcode;
+        for i in (0..=depth).rev() {
+            path[i].slot = (pathcode % SLOT_PER_BUCKET as u16) as usize;
+            pathcode /= SLOT_PER_BUCKET as u16;
+        }
+
+        path[0].bucket = if pathcode == 0 { i1 } else { i2 };
+
+        let buckets = unsafe { &*self.buckets.get() };
+        for i in 0..=depth {
+            if self.resize_counter.load(Ordering::Acquire) != resize_counter {
+                return None;
+            }
+
+            let lock_idx = self.lock_ind(path[i].bucket);
+            path[i].version = self.locks[lock_idx].read_version();
+
+            let bucket = buckets.get(path[i].bucket);
+
+            if !bucket.occupied(path[i].slot) {
+                path[i].hv = None;
+                path[i].is_empty = true;
+                return Some(i);
+            }
+
+            let key = bucket.key(path[i].slot).unwrap();
+            let hv = hash_key(key, &self.hash_builder);
+            path[i].hv = Some(hv);
+            path[i].is_empty = false;
+
+            if i < depth {
+                path[i + 1].bucket = alt_index(hp, hv.partial, path[i].bucket);
+            }
+        }
+
+        Some(depth)
+    }
+
+    /// Execute displacement moves along the path
+    fn cuckoopath_move(
+        &self,
+        path: &[CuckooRecord; MAX_BFS_PATH_LEN],
+        depth: usize,
+        orig_i1: usize,
+        orig_i2: usize,
+        hp_snapshot: usize,
+        resize_snapshot: usize,
+    ) -> bool {
+        let mut expected_values = [None::<HashValue>; MAX_BFS_PATH_LEN];
+        let mut expected_versions = [None::<u64>; MAX_BFS_PATH_LEN];
+
+        for i in 0..=depth {
+            expected_values[i] = path[i].hv;
+            expected_versions[i] = Some(path[i].version);
+        }
+
+        if depth == 0 {
+            if let Some(v) = expected_versions[0] {
+                if self.locks[self.lock_ind(path[0].bucket)].read_version() != v {
+                    return false;
+                }
+            }
+
+            let _guard = TwoBucketWriteGuard::new(&self.locks, orig_i1, orig_i2);
+
+            if self.hashpower() != hp_snapshot
+                || self.resize_counter.load(Ordering::Acquire) != resize_snapshot
+            {
+                return false;
+            }
+
+            unsafe {
+                return !(*self.buckets.get())
+                    .get(path[0].bucket)
+                    .occupied(path[0].slot);
+            }
+        }
+
+        for d in (1..=depth).rev() {
+            let from = &path[d - 1];
+            let to = &path[d];
+
+            if let Some(v) = expected_versions[d - 1] {
+                if self.locks[self.lock_ind(from.bucket)].read_version() != v {
+                    return false;
+                }
+            }
+
+            if let Some(v) = expected_versions[d] {
+                if self.locks[self.lock_ind(to.bucket)].read_version() != v {
+                    return false;
+                }
+            }
+
+            let _guard = TwoBucketWriteGuard::new(&self.locks, from.bucket, to.bucket);
+
+            if self.hashpower() != hp_snapshot
+                || self.resize_counter.load(Ordering::Acquire) != resize_snapshot
+            {
+                return false;
+            }
+
+            unsafe {
+                let buckets = &mut *self.buckets.get();
+                let from_bucket = buckets.get(from.bucket);
+                let to_bucket = buckets.get(to.bucket);
+
+                match expected_values[d - 1] {
+                    Some(expected_hv) => {
+                        if !from_bucket.occupied(from.slot) {
+                            return false;
+                        }
+                        let key = from_bucket.key(from.slot).unwrap();
+                        let hv = hash_key(key, &self.hash_builder);
+                        if hv.hash != expected_hv.hash {
+                            return false;
+                        }
+                    }
+                    None => return false,
+                }
+
+                match expected_values[d] {
+                    Some(expected_hv) => {
+                        if !to_bucket.occupied(to.slot) {
+                            return false;
+                        }
+                        let key = to_bucket.key(to.slot).unwrap();
+                        let hv = hash_key(key, &self.hash_builder);
+                        if hv.hash != expected_hv.hash {
+                            return false;
+                        }
+                    }
+                    None => {
+                        if to_bucket.occupied(to.slot) {
+                            return false;
+                        }
+                    }
+                }
+
+                let (key, value) = buckets.erase_kv(from.bucket, from.slot).unwrap();
+                let moving_hv = expected_values[d - 1].unwrap();
+                buckets.set_kv(to.bucket, to.slot, moving_hv.partial, key, value);
+            }
+
+            expected_values[d] = expected_values[d - 1];
+            expected_values[d - 1] = None;
+            expected_versions[d] = None;
+            expected_versions[d - 1] = None;
+        }
+
+        expected_values[0].is_none()
+    }
+
+    // ========== Internal: Resize ==========
+
+    /// Double the table size
+    fn cuckoo_fast_double(&self, current_hp: usize) -> Result<()> {
+        let new_hp = current_hp + 1;
+
+        let _guard = AllLocksWriteGuard::new(&self.locks);
+
+        if self.hashpower() != current_hp {
+            return Ok(());
+        }
+
+        let max_hp = self.maximum_hashpower.load(Ordering::Acquire);
+        if max_hp != NO_MAXIMUM_HASHPOWER && new_hp > max_hp {
+            return Err(CuckooError::MaximumHashpowerExceeded {
+                current: current_hp,
+                requested: new_hp,
+                maximum: max_hp,
+            });
+        }
+
+        let lf = self.load_factor();
+        let min_lf = self.minimum_load_factor();
+        if lf < min_lf {
+            return Err(CuckooError::LoadFactorTooLow {
+                load_factor: lf,
+                minimum: min_lf,
+            });
+        }
+
+        for i in 0..self.locks.len() {
+            self.maybe_rehash_lock(i);
+        }
+        self.num_remaining_lazy_rehash_locks
+            .store(0, Ordering::Release);
+
+        unsafe {
+            let old_buckets =
+                std::mem::replace(&mut *self.buckets.get(), BucketContainer::new(new_hp));
+            let old_hp = old_buckets.hashpower();
+            let old_size = old_buckets.size();
+
+
+            let mut alternate_items: Vec<(K, V, u8)> = Vec::new();
+
+            for bucket_idx in 0..old_size {
+                let old_bucket = old_buckets.get(bucket_idx);
+                for slot in 0..SLOT_PER_BUCKET {
+                    if !old_bucket.occupied(slot) {
+                        continue;
+                    }
+
+                    let key = old_bucket.key(slot).unwrap().clone();
+                    let value = old_bucket.value(slot).unwrap().clone();
+                    let partial = old_bucket.partial(slot).unwrap();
+                    let hv = hash_key(&key, &self.hash_builder);
+
+                    let old_primary = index_hash(old_hp, hv.hash);
+                    if old_primary != bucket_idx {
+                        alternate_items.push((key, value, partial));
+                        continue;
+                    }
+
+                    let new_i1 = index_hash(new_hp, hv.hash);
+                    let new_buckets = &mut *self.buckets.get();
+
+                    if let Some(empty_slot) = new_buckets.get(new_i1).find_empty_slot() {
+                        new_buckets.set_kv(new_i1, empty_slot, partial, key, value);
+                    } else {
+                        let new_i2 = alt_index(new_hp, hv.partial, new_i1);
+                        if let Some(empty_slot) = new_buckets.get(new_i2).find_empty_slot() {
+                            new_buckets.set_kv(new_i2, empty_slot, partial, key, value);
+                        } else {
+                            panic!("Rehash pass 1 failed: buckets {} and {} full", new_i1, new_i2);
+                        }
+                    }
+                }
+            }
+
+            for (key, value, partial) in alternate_items {
+                self.rehash_place_item(new_hp, key, value, partial);
+            }
+
+            *self.old_buckets.get() = None;
+        }
+
+        for lock in &self.locks {
+            lock.set_migrated(true);
+        }
+        self.num_remaining_lazy_rehash_locks
+            .store(0, Ordering::Release);
+
+        self.resize_counter.fetch_add(1, Ordering::Release);
+
+        Ok(())
+    }
+
+    /// Place a single item during rehash using BFS-based cuckoo displacement.
+    /// SAFETY: Caller must hold all locks.
+    unsafe fn rehash_place_item(&self, new_hp: usize, key: K, value: V, partial: u8) {
+        let hv = hash_key(&key, &self.hash_builder);
+        let new_i1 = index_hash(new_hp, hv.hash);
+        let new_i2 = alt_index(new_hp, hv.partial, new_i1);
+        let new_buckets = &mut *self.buckets.get();
+
+        if let Some(slot) = new_buckets.get(new_i1).find_empty_slot() {
+            new_buckets.set_kv(new_i1, slot, partial, key, value);
+            return;
+        }
+        if let Some(slot) = new_buckets.get(new_i2).find_empty_slot() {
+            new_buckets.set_kv(new_i2, slot, partial, key, value);
+            return;
+        }
+
+        let mut queue: VecDeque<(usize, usize, Vec<(usize, usize)>)> = VecDeque::new();
+        let mut visited: HashSet<usize> = HashSet::new();
+
+        queue.push_back((new_i1, 0, vec![]));
+        queue.push_back((new_i2, 0, vec![]));
+        visited.insert(new_i1);
+        visited.insert(new_i2);
+
+        let mut found_path: Option<Vec<(usize, usize)>> = None;
+        let mut target_bucket = 0;
+        let mut target_slot = 0;
+
+        while let Some((bucket, depth, path)) = queue.pop_front() {
+            if depth >= MAX_BFS_PATH_LEN {
+                continue;
+            }
+
+            let bucket_ref = new_buckets.get(bucket);
+
+            for slot in 0..SLOT_PER_BUCKET {
+                if !bucket_ref.occupied(slot) {
+                    found_path = Some(path);
+                    target_bucket = bucket;
+                    target_slot = slot;
+                    break;
+                }
+
+                let item_key = bucket_ref.key(slot).unwrap();
+                let item_hv = hash_key(item_key, &self.hash_builder);
+                let item_i1 = index_hash(new_hp, item_hv.hash);
+                let item_i2 = alt_index(new_hp, item_hv.partial, item_i1);
+
+                let alt_bucket = if bucket == item_i1 { item_i2 } else { item_i1 };
+
+                if !visited.contains(&alt_bucket) {
+                    visited.insert(alt_bucket);
+                    let mut new_path = path.clone();
+                    new_path.push((bucket, slot));
+                    queue.push_back((alt_bucket, depth + 1, new_path));
+                }
+            }
+
+            if found_path.is_some() {
+                break;
+            }
+        }
+
+        if let Some(path) = found_path {
+            for i in (0..path.len()).rev() {
+                let (src_bucket, src_slot) = path[i];
+                let src_partial = new_buckets.get(src_bucket).partial(src_slot).unwrap();
+                let (src_key, src_value) = new_buckets.erase_kv(src_bucket, src_slot).unwrap();
+
+                new_buckets.set_kv(target_bucket, target_slot, src_partial, src_key, src_value);
+
+                target_bucket = src_bucket;
+                target_slot = src_slot;
+            }
+
+            new_buckets.set_kv(target_bucket, target_slot, partial, key, value);
+        } else {
+            panic!(
+                "Rehash BFS failed: no path found for item at buckets {} or {}",
+                new_i1, new_i2
+            );
+        }
+    }
+
+    /// Move bucket from old to new container during rehash
+    /// SAFETY: Caller must hold ALL locks (not just one) because items may move
+    /// to buckets controlled by different locks
+    unsafe fn move_bucket(
+        &self,
+        old_buckets: &BucketContainer<K, V>,
+        new_buckets: &mut BucketContainer<K, V>,
+        old_bucket_idx: usize,
+    ) {
+        let new_hp = new_buckets.hashpower();
+        let old_bucket = old_buckets.get(old_bucket_idx);
+
+        for slot in 0..SLOT_PER_BUCKET {
+            if !old_bucket.occupied(slot) {
+                continue;
+            }
+
+            let key = old_bucket.key(slot).unwrap();
+            let value = old_bucket.value(slot).unwrap();
+            let partial = old_bucket.partial(slot).unwrap();
+            let hv = hash_key(key, &self.hash_builder);
+
+            let new_i1 = index_hash(new_hp, hv.hash);
+            let new_i2 = alt_index(new_hp, hv.partial, new_i1);
+
+            if let Some(empty_slot) = new_buckets.get(new_i1).find_empty_slot() {
+                new_buckets.set_kv(new_i1, empty_slot, partial, key.clone(), value.clone());
+            } else if let Some(empty_slot) = new_buckets.get(new_i2).find_empty_slot() {
+                new_buckets.set_kv(new_i2, empty_slot, partial, key.clone(), value.clone());
+            } else {
+                panic!(
+                    "Rehash failed: no empty slot for key at buckets {} or {}",
+                    new_i1, new_i2
+                );
+            }
+        }
+    }
+
+    /// Get reference to buckets (for iteration)
+    /// SAFETY: Caller must hold all locks
+    pub(crate) unsafe fn buckets_ref(&self) -> &BucketContainer<K, V> {
+        &*self.buckets.get()
+    }
+}
+
+impl<K, V, S> Default for CuckooHashMap<K, V, S>
+where
+    K: Hash + Eq + Clone,
+    V: Clone,
+    S: BuildHasher + Default,
+{
+    fn default() -> Self {
+        Self::with_hasher(S::default())
+    }
+}
