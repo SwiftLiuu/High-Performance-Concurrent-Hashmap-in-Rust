@@ -9,3 +9,11 @@ description = "A concurrent hash map using cuckoo hashing"
 
 [dev-dependencies]
 rand = "0.8"
+
+[[bin]]
+name = "basic_operations"
+path = "demo/basic_operations.rs"
+
+[[bin]]
+name = "concurrent_operations"
+path = "demo/concurrent_operations.rs"
