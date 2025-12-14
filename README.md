@@ -4,10 +4,10 @@ A concurrent hash map implementation using cuckoo hashing, providing O(1) expect
 
 ## Team Members
 
-| Name         | Student Number | Email                      |
-|--------------|----------------|----------------------------|
-| Xiangyu Liu  | TBD            | swift.liu@mail.utoronto.ca |
-| Yilin Huai   | TBD            | yilin.huai@mail.utoronto.ca|
+| Name         | Email                      |
+|--------------|----------------------------|
+| Xiangyu Liu  | swift.liu@mail.utoronto.ca |
+| Yilin Huai   | yilin.huai@mail.utoronto.ca|
 
 ## Motivation
 
