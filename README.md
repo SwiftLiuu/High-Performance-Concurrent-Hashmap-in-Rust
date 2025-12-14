@@ -33,7 +33,7 @@ The primary objectives of this project are:
 
 3. **Optimize for read-heavy workloads** using optimistic lock-free reads with version counters, falling back to locked reads only if three consecutive modification retries are detected.
 
-4. **Support dynamic resizing** with a gradual rehashing strategy that avoids global pauses
+4. **Support dynamic resizing** that automatically doubles the table capacity when needed
 
 5. **Offer a safe, ergonomic API** that feels familiar to Rust developers while maintaining thread-safety guarantees
 
@@ -89,7 +89,7 @@ The primary objectives of this project are:
 
 3. **BFS-Based Cuckoo Path Search**: When both candidate buckets are full, a breadth-first search finds an eviction path to make room for the new element.
 
-4. **Dynamic Resizing**: The table automatically doubles in size when needed, with all elements rehashed to new positions.
+4. **Dynamic Resizing**: The table automatically doubles in size when needed, acquiring a global lock and rehashing all elements to new positions.
 
 5. **Partial Key Optimization**: An 8-bit partial key derived from the hash enables fast rejection of non-matching entries without full key comparison.
 
