@@ -347,13 +347,18 @@ cargo test --release basic_operations -- --nocapture
 Running the benchmarks should produce output similar to:
 
 ```
-read-heavy: threads=1 → throughput = 8.50 M ops/s
-read-heavy: threads=2 → throughput = 15.20 M ops/s
-read-heavy: threads=4 → throughput = 28.40 M ops/s
-read-heavy: threads=8 → throughput = 45.60 M ops/s
+read-heavy: threads=1 → throughput = 8.65 M ops/s
+read-heavy: threads=2 → throughput = 19.68 M ops/s
+read-heavy: threads=4 → throughput = 45.31 M ops/s
+read-heavy: threads=8 → throughput = 57.56 M ops/s
+read-heavy: threads=16 → throughput = 92.03 M ops/s
+read-heavy: threads=32 → throughput = 89.68 M ops/s
+
 ```
 
-(Actual numbers will vary based on hardware)
+(Numbers recorded on AMD Ryzen 9 3950X 16-core, 32-thread; actual numbers will vary based on hardware)
+
+![Benchmark throughput vs. threads (our experimental results)](img/throughput_vs_threads.png)
 
 ### Using as a Library
 
