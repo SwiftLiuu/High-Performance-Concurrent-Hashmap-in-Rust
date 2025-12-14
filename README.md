@@ -83,13 +83,13 @@ The primary objectives of this project are:
 
 ### Technical Features
 
-1. **Optimistic Lock-Free Reads**: Read operations first attempt a lock-free path using version counters. Only if a concurrent write is detected do they fall back to acquiring locks.
+1. **Optimistic Lock-Free Reads**: Read operations first attempt a lock-free path using version counters. Only if three consecutive write is detected do they fall back to acquiring locks.
 
 2. **Fine-Grained Striped Locking**: Write operations use striped spinlocks, allowing concurrent writes to different portions of the table.
 
 3. **BFS-Based Cuckoo Path Search**: When both candidate buckets are full, a breadth-first search finds an eviction path to make room for the new element.
 
-4. **Dynamic Resizing**: The table automatically doubles in size when needed, acquiring a global lock and rehashing all elements to new positions.
+4. **Dynamic Resizing**: When inserts exhaust both candidate buckets, the table automatically doubles; it grabs all stripe locks, rebuilds the bucket array, and rehashes all items into their new positions.
 
 5. **Partial Key Optimization**: An 8-bit partial key derived from the hash enables fast rejection of non-matching entries without full key comparison.
 
