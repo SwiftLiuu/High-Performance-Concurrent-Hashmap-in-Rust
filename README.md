@@ -27,11 +27,11 @@ The cuckoo hashing algorithm, as described in the EuroSys 2014 paper "Algorithmi
 
 The primary objectives of this project are:
 
-1. **Implement a concurrent cuckoo hash map** that achieves high throughput and stable tail latency across diverse workloads (read-heavy, write-heavy, and mixed)
+1. **Implement a concurrent cuckoo hash map** that achieves high throughput across diverse workloads (read-heavy, write-heavy, and mixed)
 
 2. **Provide O(1) expected time complexity** for all core operations (`get`, `insert`, `remove`) through the cuckoo hashing algorithm
 
-3. **Optimize for read-heavy workloads** using optimistic lock-free reads with version counters, falling back to locked reads only when concurrent modifications are detected
+3. **Optimize for read-heavy workloads** using optimistic lock-free reads with version counters, falling back to locked reads only if three consecutive modification retries are detected.
 
 4. **Support dynamic resizing** with a gradual rehashing strategy that avoids global pauses
 
