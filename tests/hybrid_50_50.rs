@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 const PRELOAD: usize = 100_000;
 const DURATION: Duration = Duration::from_secs(5);
-const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
+const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8, 16, 32];
 
 fn run_workload(name: &str, insert_pct: u32) {
     for &threads in THREAD_COUNTS {
