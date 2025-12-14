@@ -360,6 +360,8 @@ read-heavy: threads=32 → throughput = 89.68 M ops/s
 
 ![Benchmark throughput vs. threads (our experimental results)](img/throughput_vs_threads.png)
 
+In our runs, throughput scales almost linearly up to 16 threads on the 3950X and then flattens, with a slight dip at 32 threads. This matches expectations: optimistic reads keep contention low at modest core counts, while cache and lock striping pressure start to dominate once we oversubscribe the L3 and saturate memory bandwidth.
+
 ### Using as a Library
 
 To use this crate in your own project:
@@ -419,6 +421,8 @@ cuckoo-hashmap = { path = "/path/to/High-Performance-Concurrent-Hashmap-in-Rust"
 
 5. **Testing Concurrent Code**: Writing correct concurrent tests is challenging. Race conditions may not manifest in every run. We learned to use barriers for synchronization and to run tests multiple times with varying thread counts.
 
+6. **Throughput Plateauing with More Threads**: Scaling is nearly linear up to mid-core counts, but beyond that caches and memory bandwidth dominate, and contention on striped locks flattens or slightly reduces throughput—more threads do not always mean more speed.
+
 
 ### Concluding Remarks
 
@@ -436,6 +440,4 @@ The combination of cuckoo hashing's O(1) worst-case lookups with optimistic lock
 
 4. Tobias Maier, Peter Sanders, and Roman Dementiev. *Concurrent Hash Tables: Fast and General(?)*. ACM Transactions on Parallel Computing, Vol. 5, No. 4, Article 16, February 2019.
 
-## License
 
-This project is dual-licensed under MIT and Apache-2.0 licenses.
