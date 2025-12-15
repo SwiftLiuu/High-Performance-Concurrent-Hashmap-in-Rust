@@ -540,7 +540,6 @@ where
         }
     }
 
-    /// Lazy rehash: migrate buckets under this lock if not yet done.
     pub(crate) fn maybe_rehash_lock(&self, lock_idx: usize) {
         let lock = &self.locks[lock_idx];
 
