@@ -8,7 +8,7 @@ fn main() {
 
     // 1. Create and insert
     println!("1. Creating map and inserting items:");
-    let map = CuckooHashMap::new();
+    let map = CuckooHashMap::with_capacity(8);
     map.insert("apple", 100).unwrap();
     map.insert("banana", 200).unwrap();
     map.insert("cherry", 300).unwrap();
@@ -38,7 +38,7 @@ fn main() {
 
     // 5. Bulk insert
     println!("5. Bulk insert:");
-    let map2: CuckooHashMap<i32, i32> = CuckooHashMap::new();
+    let map2: CuckooHashMap<i32, i32> = CuckooHashMap::with_capacity(8);
     for i in 1..=100 {
         map2.insert(i, i * 10).unwrap();
     }
@@ -58,7 +58,7 @@ fn main() {
         name: String,
     }
 
-    let users: CuckooHashMap<UserId, User> = CuckooHashMap::new();
+    let users: CuckooHashMap<UserId, User> = CuckooHashMap::with_capacity(8);
     users.insert(UserId(1), User { name: "Alice".to_string() }).unwrap();
     users.insert(UserId(2), User { name: "Bob".to_string() }).unwrap();
 
