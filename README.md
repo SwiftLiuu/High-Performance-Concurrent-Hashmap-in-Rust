@@ -9,6 +9,16 @@ A concurrent hash map implementation using cuckoo hashing, providing O(1) expect
 | Xiangyu Liu  | swift.liu@mail.utoronto.ca |
 | Yilin Huai   | yilin.huai@mail.utoronto.ca|
 
+## Video Slide Presentation
+
+[Link to slides presentation video]
+
+## Video Demo
+
+Watch our demonstration of the CuckooHashMap in action:
+
+[https://youtu.be/FMv8x93ZVrE](https://youtu.be/FMv8x93ZVrE)
+
 ## Motivation
 
 Concurrent hash tables are fundamental building blocks in systems such as caches, databases, schedulers, and real-time analytics pipelines. In Rust, existing solutions like `DashMap` and `RwLock<HashMap>` focus on usability or basic thread-safety, but they often lack **predictable performance** under heavy, mixed workloads.
