@@ -11,7 +11,9 @@ A concurrent hash map implementation using cuckoo hashing, providing O(1) expect
 
 ## Video Slide Presentation
 
-[Link to slides presentation video]
+Watch our project presentation:
+
+[https://youtu.be/NjZb76y8ks0](https://youtu.be/NjZb76y8ks0)
 
 ## Video Demo
 
